@@ -66,6 +66,25 @@ To solve this, Java introduced virtual threads, which are scheduled by the JVM o
 
 To prevent unbounded thread creation:
  * Use a **bounded queue** to hold tasks.
- * Use a **semaphore** to restrict concurrent threads.
+ * Use a **semaphore** to restrict concurrent threads. See VirtualThreadsLimits class
 
+## How does Virtual Thread do blocking IO?
+A virtual thread runs on top of carrier thread, (platform thread, real OS thread).
+At this point, the carrier thread is just executing the Java code on behalf of that virtual thread.
 
+Blocking IO: InputStream.read()
+* If this were a normal platform thread, it would block in the kernel until data arrives.
+* That would waste the carrier thread for whole duration
+
+But virtual thread avoids this by using **JVM's async I/O Integration**:
+* The JVM intercepts the blocking call
+* Underneath, it usually uses async APIs from the OS (epoll, kqueue, IOCP, etc.) to register 
+the interest in that I/O event.
+* Then the JVM unmounts the virtual thread from the carrier thread.
+
+Once the virtual thread is unmounted, the carrier thread is free immediately.
+So, 
+* The carrier/platform thread leaves the OS thread and becomes reusable.
+* The I/O readiness is tracked by JVM/OS event mechanism.
+* When I/O completes (data is ready), the virtual thread is placed in a runnable queue and
+the JVM schedules the virtual thread back onto some (not necessarily same) carrier thread.
