@@ -88,3 +88,10 @@ So,
 * The I/O readiness is tracked by JVM/OS event mechanism.
 * When I/O completes (data is ready), the virtual thread is placed in a runnable queue and
 the JVM schedules the virtual thread back onto some (not necessarily same) carrier thread.
+
+## Fairness: Scheduling virtual threads from multiple Executor Service (handling tasks from multiple queues having unequal load)
+JVM scheduler's treats all threads equally, aiming to keep the underlying platform threads (and thus the CPU cores) as busy as possible.. Its goal is throughput, not weighted fairness.
+
+We can control concurrency using semaphors (e.g. 50K threads for Queue1, 10K for Queue2). However, this has no influence on scheduling. The virtual thread scheduler, which is by default a work-stealing ForkJoinPool, sees a single pool of 60,000 runnable virtual threads. Its job is to grab any available virtual thread and run it on a free platform thread. It does not know or care that 50,000 of them originated from Queue1 and 10,000 from Queue2. It just sees work to be done and does it as fast as possible.
+
+To achieve the 5:1 execution ratio you desire, we must enforce this logic at the application level, before the tasks are submitted to be run as virtual threads. We control the rate of submission from your queues, not the scheduling of the threads once they are running. If the threads are in 5:1 ratio in the system, the threads will be treated fairly (each thread will get chance to execute)
